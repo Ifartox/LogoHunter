@@ -35,15 +35,16 @@ def build_job_card(job: dict) -> str:
     return message_text
 
 
-def build_job_keyboard(job_id: int) -> InlineKeyboardMarkup:
+def build_job_keyboard(job_id: int, url: str) -> InlineKeyboardMarkup:
     """
-    Crea i due pulsanti interattivi da associare all'annuncio.
-    Il parametro callback_data trasporta l'azione e l'ID dell'annuncio.
+    Crea i pulsanti per la modalità sola notifica:
+    - Un pulsante URL che apre direttamente il link dell'annuncio nel browser del telefono.
+    - Un pulsante 'Archivia' per contrassegnare l'annuncio come letto.
     """
     keyboard = [
         [
-            InlineKeyboardButton("🟢 Invia CV", callback_data=f"send_{job_id}"),
-            InlineKeyboardButton("⚪ Ignora", callback_data=f"skip_{job_id}")
+            InlineKeyboardButton("🌐 Apri Annuncio", url=url),
+            InlineKeyboardButton("📁 Archivia", callback_data=f"skip_{job_id}")
         ]
     ]
     return InlineKeyboardMarkup(keyboard)

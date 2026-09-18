@@ -2,12 +2,9 @@ name: Job Hunter Pipeline
 
 on:
   schedule:
-    # Esegue ogni 4 ore (ore 04, 08, 12, 16, 20 UTC)
     - cron: '0 4,8,12,16,20 * * *'
-  # Consente l'avvio manuale dalla scheda "Actions" di GitHub
   workflow_dispatch:
 
-# FONDAMENTALE: Assegna i permessi per salvare e fare il push del database aggiornato
 permissions:
   contents: write
 
@@ -18,6 +15,8 @@ jobs:
     steps:
       - name: Scarica il codice della repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Configura ambiente Python
         uses: actions/setup-python@v5
@@ -36,12 +35,15 @@ jobs:
         run: |
           python main.py
 
-      - name: Salva aggiornamenti del database SQLite
+      - name: Salva e persisti il database SQLite
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          # Crea la cartella data se non esiste e traccia il file jobs.db
-          git add -f data/jobs.db
-          # Esegue il commit solo se il file del database ha subito variazioni
-          git commit -m "Aggiornamento automatico annunci visti [skip ci]" || echo "Nessuna modifica al database da salvare."
-          git push
+          git add -f data/jobs.db || true
+          if git status --porcelain | grep -q "jobs.db"; then
+            git commit -m "Salvataggio automatico database annunci [skip ci]"
+            git pull --rebase
+            git push origin main
+          else
+            echo "Nessun nuovo annuncio: database invariato."
+          fi

@@ -61,7 +61,7 @@ def build_feed_urls() -> List[str]:
     
     # Esempio di combinazioni query per Google Alerts RSS o feed aperti
     # Sintassi URL feed Google News / Job query aperte:
-    for keyword in ["fisioterapista", "fisioterapia"]:
+    for keyword in ["logopedista", "logopedia"]:
         for city in ["firenze", "prato"]:
             query = f"{keyword} {city} lavoro"
             encoded_query = urllib.parse.quote(query)

@@ -2,10 +2,14 @@ name: Job Hunter Pipeline
 
 on:
   schedule:
-    # Esegue ogni 4 ore (minuto 0, alle ore 04, 08, 12, 16, 20 UTC)
+    # Esegue ogni 4 ore (ore 04, 08, 12, 16, 20 UTC)
     - cron: '0 4,8,12,16,20 * * *'
   # Consente l'avvio manuale dalla scheda "Actions" di GitHub
   workflow_dispatch:
+
+# FONDAMENTALE: Assegna i permessi per salvare e fare il push del database aggiornato
+permissions:
+  contents: write
 
 jobs:
   run-hunter:
@@ -36,6 +40,8 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/jobs.db || true
-          git commit -m "Auto-aggiornamento annunci e stati [skip ci]" || exit 0
+          # Crea la cartella data se non esiste e traccia il file jobs.db
+          git add -f data/jobs.db
+          # Esegue il commit solo se il file del database ha subito variazioni
+          git commit -m "Aggiornamento automatico annunci visti [skip ci]" || echo "Nessuna modifica al database da salvare."
           git push

@@ -11,8 +11,8 @@ __pycache__/
 .env
 
 # Database locale e file generati
-data/*.db
-data/*.sqlite3
+#data/*.db
+#data/*.sqlite3
 
 # Documenti personali
 cv/*.pdf

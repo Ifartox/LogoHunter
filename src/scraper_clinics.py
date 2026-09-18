@@ -9,6 +9,7 @@ from src import database
 
 # Lista di strutture sanitarie e centri riabilitativi di Firenze e Prato
 # Puoi aggiungere o modificare gli URL inserendo le pagine "Lavora con noi" o "Contatti"
+# Lista corretta e verificata di strutture sanitarie
 TARGET_CLINICS: List[Dict[str, str]] = [
     {
         "name": "Istituto Prosperius",
@@ -16,17 +17,7 @@ TARGET_CLINICS: List[Dict[str, str]] = [
         "url": "https://www.prosperius.it/lavora-con-noi/"
     },
     {
-        "name": "Misericordia di Firenze - Sezione Sanitaria",
-        "location": "Firenze",
-        "url": "https://www.misericordia.firenze.it/lavora-con-noi"
-    },
-    {
-        "name": "Centro Medico San Sebastiano",
-        "location": "Prato",
-        "url": "https://www.misericordiadiprato.it/servizi-sanitari/lavora-con-noi/"
-    },
-    {
-        "name": "Rete PAS - Centri Medici No-Profit",
+        "name": "Rete PAS - Centri Medici",
         "location": "Firenze/Scandicci",
         "url": "https://www.retepas.org/lavora-con-noi/"
     },
@@ -34,6 +25,26 @@ TARGET_CLINICS: List[Dict[str, str]] = [
         "name": "Istituto Fanfani Ricerche Cliniche",
         "location": "Firenze",
         "url": "https://www.istitutofanfani.it/lavora-con-noi/"
+    },
+    {
+        "name": "Villa Donatello",
+        "location": "Sesto Fiorentino",
+        "url": "https://villadonatello.com/lavora-con-noi/"
+    },
+    {
+        "name": "Misericordia di Firenze",
+        "location": "Firenze",
+        "url": "https://www.misericordia.firenze.it/it/contatti"
+    },
+    {
+        "name": "Misericordia di Prato",
+        "location": "Prato",
+        "url": "https://www.misericordia.prato.it/contatti/"
+    },
+    {
+        "name": "Centro Medico San Sebastiano",
+        "location": "Prato",
+        "url": "https://www.sansebastianoprato.it/lavora-con-noi/"
     }
 ]
 

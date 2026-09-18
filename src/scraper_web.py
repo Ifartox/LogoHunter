@@ -9,21 +9,14 @@ from src import database
 
 
 def extract_email(text: str) -> Optional[str]:
-    """
-    Estrae un indirizzo email dal testo tramite un'espressione regolare (regex).
-    """
-    email_pattern = r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'
-    match = re.search(email_pattern, text)
+    email_pattern = r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.(?:it|com|org|net|eu)\b'
+    match = re.search(email_pattern, text, re.IGNORECASE)
     if match:
         return match.group(0).lower()
     return None
 
 
 def fetch_html_safe(url: str) -> Optional[str]:
-    """
-    Scarica il contenuto HTML configurando una sessione HTTP completa di header
-    per ridurre il rischio di rifiuti 403/anti-bot.
-    """
     session = requests.Session()
     headers = {
         "User-Agent": (
@@ -31,33 +24,26 @@ def fetch_html_safe(url: str) -> Optional[str]:
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/124.0.0.0 Safari/537.36"
         ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://www.google.com/",
-        "DNT": "1",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "it-IT,it;q=0.9",
         "Connection": "keep-alive"
     }
     try:
         response = session.get(url, headers=headers, timeout=12)
         if response.status_code == 200:
             return response.text
-        else:
-            print(f"[WEB_SCRAPER] Fonte non accessibile ({url}) - Codice HTTP: {response.status_code}")
-            return None
+        print(f"[WEB_SCRAPER] Fonte non accessibile ({url}) - Codice HTTP: {response.status_code}")
+        return None
     except Exception as error:
         print(f"[WEB_SCRAPER] Errore di connessione verso {url}: {error}")
         return None
 
 
-def scrape_open_bacheca(keyword: str, city: str) -> List[Dict[str, Any]]:
-    """
-    Interroga portali pubblici di annunci/concorsi aperti per la Toscana.
-    """
-    query = f"{keyword} {city}"
-    encoded_query = urllib.parse.quote(query)
-    
-    # Portale aggregatore aperto per la sanità regionale e concorsi/avvisi
-    target_url = f"https://www.concorsipubblici.com/ricerca?search_api_views_fulltext={encoded_query}"
+def scrape_concorsi_sanita(keyword: str, province: str) -> List[Dict[str, Any]]:
+    # Query sul portale bandi e avvisi del servizio sanitario
+    query = f"{keyword} {province}"
+    encoded = urllib.parse.quote_plus(query)
+    target_url = f"https://www.concorsipubblici.com/concorsi/{encoded}.htm"
 
     html_content = fetch_html_safe(target_url)
     if not html_content:
@@ -66,46 +52,27 @@ def scrape_open_bacheca(keyword: str, city: str) -> List[Dict[str, Any]]:
     soup = BeautifulSoup(html_content, "html.parser")
     found_jobs = []
 
-    # Seleziona gli elementi che contengono le righe dei bandi o degli annunci
-    job_rows = soup.find_all("div", class_="views-row")
-
-    for row in job_rows:
-        link_tag = row.find("a", href=True)
-        if not link_tag:
-            continue
-
-        title = link_tag.get_text(separator=" ", strip=True)
-        full_url = urllib.parse.urljoin("https://www.concorsipubblici.com", link_tag["href"])
-        description = row.get_text(separator=" ", strip=True)
-
-        # Verifica presenza della parola chiave e della località
-        text_to_check = f"{title} {description}".lower()
-        if keyword.lower() not in text_to_check:
-            continue
-
-        contact_email = extract_email(description)
-
-        found_jobs.append({
-            "source": "CONCORSI_AVVISI_WEB",
-            "external_id": full_url,
-            "title": title,
-            "company": "Ente Pubblico / Struttura Sanitaria",
-            "location": city.capitalize(),
-            "url": full_url,
-            "description": description[:500],
-            "contact_email": contact_email
-        })
+    # Cerca elementi lista o link a bandi sanitari
+    for link in soup.find_all("a", href=True):
+        href = link["href"]
+        text = link.get_text(strip=True)
+        if "/concorso-" in href and any(kw in text.lower() for kw in config.TARGET_KEYWORDS):
+            full_url = urllib.parse.urljoin(target_url, href)
+            found_jobs.append({
+                "source": "BANDI_SANITARI_WEB",
+                "external_id": full_url,
+                "title": text,
+                "company": "Servizio Sanitario Regionale / ASL",
+                "location": province.capitalize(),
+                "url": full_url,
+                "description": f"Bando/Avviso pubblico per logopedista reperito online ({province.capitalize()}).",
+                "contact_email": None
+            })
 
     return found_jobs
 
 
 def run_web_scraper() -> List[int]:
-    """
-    Funzione principale del modulo:
-    1. Scandaglia le ricerche per le province di Firenze e Prato.
-    2. Salva nel database SQLite gli annunci non ancora censiti.
-    3. Restituisce gli ID delle nuove posizioni inserite.
-    """
     new_ids = []
     print("[WEB_SCRAPER] Avvio scansione bacheche aperte per Firenze e Prato...")
 
@@ -116,7 +83,7 @@ def run_web_scraper() -> List[int]:
 
     for kw, city in targets:
         print(f"[WEB_SCRAPER] Ricerca annunci per: '{kw}' a '{city}'...")
-        items = scrape_open_bacheca(kw, city)
+        items = scrape_concorsi_sanita(kw, city)
 
         for item in items:
             inserted_id = database.insert_job(

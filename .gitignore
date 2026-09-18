@@ -1,0 +1,18 @@
+# Ambiente virtuale
+venv/
+.venv/
+env/
+
+# Cache di Python
+__pycache__/
+*.py[cod]
+
+# File di configurazione riservati
+.env
+
+# Database locale e file generati
+data/*.db
+data/*.sqlite3
+
+# Documenti personali
+cv/*.pdf

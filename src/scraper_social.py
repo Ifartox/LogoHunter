@@ -10,8 +10,7 @@ from src import database
 
 def extract_email(text: str) -> Optional[str]:
     """
-    Cerca un indirizzo email all'interno del testo usando una Regular Expression (Regex).
-    Riconosce i domini più comuni evitando parole adiacenti.
+    Cerca un indirizzo email all'interno del testo usando una Regex.
     """
     pattern = r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.(?:it|com|org|net|eu)\b'
     match = re.search(pattern, text, re.IGNORECASE)
@@ -23,7 +22,6 @@ def extract_email(text: str) -> Optional[str]:
 def fetch_with_headers(url: str) -> Optional[str]:
     """
     Effettua una chiamata HTTP GET simulando una richiesta legittima da browser.
-    Questo evita che le piattaforme social rifiutino la connessione.
     """
     headers = {
         "User-Agent": (
@@ -45,19 +43,27 @@ def fetch_with_headers(url: str) -> Optional[str]:
         return None
 
 
+def is_location_valid(location_str: str) -> bool:
+    """
+    Verifica se la località appartiene alle province/città target (Firenze, Prato e limitrofi).
+    Restituisce True se valida, False se appartiene ad altre province (es. Bologna).
+    """
+    loc_lower = location_str.lower()
+    return any(target.lower() in loc_lower for target in config.TARGET_LOCATIONS)
+
+
 # ---------------------------------------------------------------------------
-# 1. SCRAPER PER LINKEDIN (Bacheca pubblica per ospiti)
+# 1. SCRAPER PER LINKEDIN (Bacheca pubblica con filtro geografico)
 # ---------------------------------------------------------------------------
 
 def scrape_linkedin_jobs(keyword: str, location: str) -> List[Dict[str, Any]]:
     """
-    Interroga la bacheca annunci pubblica di LinkedIn per una specifica combinazione
-    di parola chiave e località, senza richiedere autenticazione.
+    Interroga la bacheca pubblica di LinkedIn filtrando solo per annunci
+    effettivamente localizzati nelle zone target.
     """
     encoded_kw = urllib.parse.quote(keyword)
     encoded_loc = urllib.parse.quote(location)
 
-    # Endpoint pubblico dei job post di LinkedIn
     url = (
         f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?"
         f"keywords={encoded_kw}&location={encoded_loc}&start=0"
@@ -69,35 +75,39 @@ def scrape_linkedin_jobs(keyword: str, location: str) -> List[Dict[str, Any]]:
 
     soup = BeautifulSoup(html_content, "html.parser")
     found_jobs = []
-
-    # In LinkedIn ogni scheda annuncio è racchiusa in un elemento <li>
     job_cards = soup.find_all("li")
 
     for card in job_cards:
-        # Estrazione titolo
+        # Estrazione del titolo
         title_elem = card.find("h3", class_="base-search-card__title")
         if not title_elem:
             continue
         title = title_elem.get_text(strip=True)
 
-        # Controllo pertinenza: il titolo deve contenere 'logopedista' o termini correlati
+        # Controllo pertinenza professione
         title_lower = title.lower()
         if not any(kw.lower() in title_lower for kw in config.TARGET_KEYWORDS):
             continue
 
-        # Estrazione azienda o studio
-        company_elem = card.find("h4", class_="base-search-card__subtitle")
-        company = company_elem.get_text(strip=True) if company_elem else "Struttura su LinkedIn"
-
-        # Estrazione città/provincia
+        # Estrazione della località rilevata dalla scheda
         location_elem = card.find("span", class_="job-search-card__location")
         job_location = location_elem.get_text(strip=True) if location_elem else location.capitalize()
 
-        # Estrazione link univoco dell'annuncio
+        # FILTRO GEOGRAFICO STRINGENTE:
+        # Se LinkedIn restituisce un annuncio fuori zona (es. Bologna, Roma), lo scartiamo
+        if not is_location_valid(job_location):
+            print(f"[SOCIAL FILTRO SCARTATO] Posizione non in target geografico ({job_location}): {title}")
+            continue
+
+        # Estrazione azienda
+        company_elem = card.find("h4", class_="base-search-card__subtitle")
+        company = company_elem.get_text(strip=True) if company_elem else "Struttura su LinkedIn"
+
+        # Estrazione URL pulito
         link_elem = card.find("a", class_="base-card__full-link", href=True)
         if not link_elem:
             continue
-        job_url = link_elem["href"].split("?")[0]  # Rimuove i parametri di tracking
+        job_url = link_elem["href"].split("?")[0]
 
         found_jobs.append({
             "source": "LINKEDIN_JOBS",
@@ -106,7 +116,7 @@ def scrape_linkedin_jobs(keyword: str, location: str) -> List[Dict[str, Any]]:
             "company": company,
             "location": job_location,
             "url": job_url,
-            "description": f"Annuncio di lavoro pubblicato su LinkedIn da {company} ({job_location}).",
+            "description": f"Offerta pubblicata su LinkedIn da {company} ({job_location}).",
             "contact_email": None
         })
 
@@ -114,10 +124,9 @@ def scrape_linkedin_jobs(keyword: str, location: str) -> List[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# 2. SCRAPER PER CANALI SOCIAL TELEGRAM APERTI (Bacheche Lavoro Sanità)
+# 2. SCRAPER PER CANALI TELEGRAM APERTI
 # ---------------------------------------------------------------------------
 
-# Canali pubblici che diffondono avvisi, concorsi e offerte sanitarie in Toscana
 PUBLIC_TELEGRAM_CHANNELS = [
     "concorsisanitari",
     "lavorotoscana"
@@ -125,8 +134,7 @@ PUBLIC_TELEGRAM_CHANNELS = [
 
 def scrape_telegram_public_channel(channel_name: str) -> List[Dict[str, Any]]:
     """
-    Legge la versione web pubblica di un canale Telegram (https://t.me/s/nomecanale).
-    Non richiede credenziali e permette di estrarre messaggi recenti.
+    Legge la bacheca pubblica di un canale Telegram.
     """
     url = f"https://t.me/s/{channel_name}"
     html_content = fetch_with_headers(url)
@@ -138,28 +146,22 @@ def scrape_telegram_public_channel(channel_name: str) -> List[Dict[str, Any]]:
     found_jobs = []
 
     for msg in messages:
-        # Testo del post
         text_elem = msg.find("div", class_="tgme_widget_message_text")
         if not text_elem:
             continue
         text = text_elem.get_text(separator=" ", strip=True)
         text_lower = text.lower()
 
-        # Verifica: deve citare logopedia/logopedista E una delle località target
         has_role = any(kw.lower() in text_lower for kw in config.TARGET_KEYWORDS)
         has_location = any(loc.lower() in text_lower for loc in config.TARGET_LOCATIONS)
 
         if not (has_role and has_location):
             continue
 
-        # Link univoco del messaggio
         link_elem = msg.find("a", class_="tgme_widget_message_date", href=True)
         message_url = link_elem["href"] if link_elem else url
-
-        # Estrazione eventuale email di contatto nel testo
         email = extract_email(text)
 
-        # Creazione del titolo sintetico prendendo le prime parole
         first_line = text.split("\n")[0][:80]
         title = f"Post Social ({channel_name}): {first_line}"
 
@@ -182,21 +184,15 @@ def scrape_telegram_public_channel(channel_name: str) -> List[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 def run_social_scraper() -> List[int]:
-    """
-    Coordina tutte le scansioni dei canali social (LinkedIn + Canali aperti).
-    Inserisce le nuove offerte nel database locale evitando duplicati.
-    Restituisce la lista degli ID delle nuove offerte inserite.
-    """
     new_ids = []
     print("[SOCIAL_SCRAPER] Avvio scansione social (LinkedIn + Canali Lavoro Sanità)...")
 
-    # 1. Scansione LinkedIn su Firenze e Prato
-    linkedin_queries = [
+    targets = [
         ("logopedista", "Firenze"),
         ("logopedista", "Prato")
     ]
 
-    for kw, city in linkedin_queries:
+    for kw, city in targets:
         print(f"[SOCIAL_SCRAPER] LinkedIn: ricerca '{kw}' a '{city}'...")
         jobs = scrape_linkedin_jobs(kw, city)
         for item in jobs:
@@ -214,7 +210,6 @@ def run_social_scraper() -> List[int]:
                 new_ids.append(inserted_id)
                 print(f"[SOCIAL NUOVO] #{inserted_id} {item['title']} - {item['company']} ({item['location']})")
 
-    # 2. Scansione Canali Telegram pubblici
     for channel in PUBLIC_TELEGRAM_CHANNELS:
         print(f"[SOCIAL_SCRAPER] Monitoraggio canale social @{channel}...")
         channel_jobs = scrape_telegram_public_channel(channel)

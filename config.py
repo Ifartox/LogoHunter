@@ -23,11 +23,12 @@ DATABASE_PATH = BASE_DIR / "data" / "jobs.db"
 
 # Parole chiave e località target per il filtraggio
 TARGET_KEYWORDS = [
-    "fisioterapista",
-    "fisioterapia",
+    "logopedista",
+    "logopedia",
     "riabilitazione",
-    "osteopata",
-    "terapista della neuro e psicomotricità"
+    "vocal coach",
+    "disfonia"
+    "deglutizione"
 ]
 
 TARGET_LOCATIONS = [

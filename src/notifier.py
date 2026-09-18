@@ -60,7 +60,8 @@ async def send_job_notification(app: Application, job: dict) -> bool:
         return False
 
     text = build_job_card(job)
-    keyboard = build_job_keyboard(job["id"])
+    # Passiamo sia l'id del job sia l'url per il pulsante web:
+    keyboard = build_job_keyboard(job["id"], job.get("url", ""))
 
     try:
         await app.bot.send_message(
